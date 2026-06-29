@@ -115,7 +115,30 @@ class Document {
     // Run pre-save hooks
     if (this._schema && this._schema.preHooks['save']) {
       const hookFn = this._schema.preHooks['save'];
-      await new Promise((resolve) => hookFn.call(this, resolve));
+      await new Promise(async (resolve, reject) => {
+        let resolved = false;
+        const next = (err) => {
+          if (resolved) return;
+          resolved = true;
+          if (err) reject(err);
+          else resolve();
+        };
+        try {
+          const result = hookFn.call(this, next);
+          if (result && typeof result.then === 'function') {
+            await result;
+            if (!resolved) {
+              resolved = true;
+              resolve();
+            }
+          }
+        } catch (err) {
+          if (!resolved) {
+            resolved = true;
+            reject(err);
+          }
+        }
+      });
     }
 
     const list = database[this._modelName];
